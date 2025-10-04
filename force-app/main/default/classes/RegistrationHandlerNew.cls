@@ -1,8 +1,42 @@
 public without sharing class RegistrationHandlerNew {
+    //---------------------------------------------------------------------------------------------
+    // AccountShare deleted
+    public static List<Meeting__Share> removeMeetingAccess(List<AccountShare> accountShares) {
+        Map<Id, List<Meeting__c>> meetingsByUserId = getMeetingsByUserId(accountShares);
+
+        Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
+        for (Id userId : meetingsByUserId.keySet()) {
+            List<Meeting__c> meetings = meetingsByUserId.get(userId);
+
+            if (meetings == null || meetings.isEmpty()) {
+                continue;
+            }
+
+            Set<Id> meetingIds = new Map<Id, Meeting__c>(meetings).keySet();
+
+            meetingIdsByUserId.put(userId, meetingIds);
+        }
+
+        List<Meeting__Share> deletedMeetingShares = removeMeetingAccess(meetingIdsByUserId);
+
+        System.debug('-----4 deletedMeetingShares: ' + deletedMeetingShares);
+
+        return deletedMeetingShares;
+    }
 
     //---------------------------------------------------------------------------------------------
     // AccountShare added
     public static List<Meeting__Share> grantMeetingAccess(List<AccountShare> accountShares) {
+        Map<Id, List<Meeting__c>> meetingsByUserId = getMeetingsByUserId(accountShares);
+
+        List<Meeting__Share> insertedMeetingShares = grantMeetingAccess(meetingsByUserId);
+
+        System.debug('-----3 insertedMeetingShares: ' + insertedMeetingShares);
+
+        return insertedMeetingShares;
+    }
+
+    public static Map<Id, List<Meeting__c>> getMeetingsByUserId(List<AccountShare> accountShares) {
         Map<Id, Set<Id>> userIdsByAccountId = new Map<Id, Set<Id>>();
         for (AccountShare share : accountShares) {
             if (!userIdsByAccountId.containsKey(share.AccountId)) {
@@ -44,28 +78,24 @@ public without sharing class RegistrationHandlerNew {
 
         System.debug('-----2 meetingsByUserId: ' + meetingsByUserId);
 
-        List<Meeting__Share> meetingShares = grantMeetingAccess(meetingsByUserId);
-
-        System.debug('-----3 meetingShares: ' + meetingShares);
-
-        return null;
+        return meetingsByUserId;
     }
 
 
     //---------------------------------------------------------------------------------------------
     // Insert/Delete meetings shares
 
-    private static List<String> sharingRowCauses = new List<String>{'Manual'};
-    
+    private static List<String> sharingRowCauses = new List<String>{'CustomSharing__c'}; // 'Manual', 'Owner', 'CustomSharing__c'
 
-    public static List<Meeting__Share> removeMeetingAccess(Map<Id, List<Id>> meetingIdsByUserId) {
+
+    public static List<Meeting__Share> removeMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
         List<Meeting__Share> existingShares = getExistingShares(meetingIdsByUserId);
 
         List<Meeting__Share> sharesToDelete = new List<Meeting__Share>();
 
 
         for (Meeting__Share share : existingShares) {
-            List<Id> meetingIds = meetingIdsByUserId.get(share.UserOrGroupId);
+            Set<Id> meetingIds = meetingIdsByUserId.get(share.UserOrGroupId);
             if (meetingIds == null || meetingIds.isEmpty()) {
                 continue;
             }
@@ -126,9 +156,9 @@ public without sharing class RegistrationHandlerNew {
 
     public static List<Meeting__Share> getExistingShares(Map<Id, List<Meeting__c>> meetingsByUserId) {
 
-        Map<Id, List<Id>> meetingIdsByUserId = new Map<Id, List<Id>>();
+        Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
         for (Id userId : meetingsByUserId.keySet()) {
-            List<Id> meetingIds = new List<Id>();
+            Set<Id> meetingIds = new Set<Id>();
             for (Meeting__c meeting : meetingsByUserId.get(userId)) {
                 meetingIds.add(meeting.Id);
             }
@@ -140,7 +170,7 @@ public without sharing class RegistrationHandlerNew {
         return getExistingShares(meetingIdsByUserId);
     }
 
-    public static List<Meeting__Share> getExistingShares(Map<Id, List<Id>> meetingIdsByUserId) {
+    public static List<Meeting__Share> getExistingShares(Map<Id, Set<Id>> meetingIdsByUserId) {
         Set<Id> userIds = meetingIdsByUserId.keySet();
         Set<Id> allMeetingIds = new Set<Id>();
         for( Id userId : userIds) {
@@ -165,7 +195,7 @@ public without sharing class RegistrationHandlerNew {
         share.ParentId = meetingId;
         share.UserOrGroupId = userId;
         share.AccessLevel = 'Read';
-        share.RowCause = 'Manual'; // Important for delete
+        share.RowCause = 'CustomSharing__c'; // Important for delete
         
         return share;
     }

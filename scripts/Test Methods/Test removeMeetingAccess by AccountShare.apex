@@ -9,10 +9,11 @@ Id meeting2_2_Id = 'a01J7000004jhsAIAQ'; // 'Meeting 2-2'
 
 Id userId = standardUser1Id;
 
+//---------------------------------------------------------------------------------------------
+// AccountShare deleted
 AccountShare accountShare = createAccountShare(acc1_Id, userId);
-
-insert accountShare;
-System.debug('-----accountShare: ' + accountShare);
+RegistrationHandlerNew.removeMeetingAccess(new List<AccountShare>{accountShare});
+//---------------------------------------------------------------------------------------------
 
 AccountShare createAccountShare(Id accountId, Id userId) {
     AccountShare share = new AccountShare();
@@ -27,4 +28,3 @@ AccountShare createAccountShare(Id accountId, Id userId) {
 
     return share;
 }
-
