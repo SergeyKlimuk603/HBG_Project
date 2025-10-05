@@ -24,6 +24,20 @@ Set<Id> meetingIds = new Set<Id>{
     , meeting2_2_Id
 };
 
+AccountShare createAccountShare(Id accountId, Id userId) {
+    AccountShare share = new AccountShare();
+    share.AccountId = accountId;
+    share.UserOrGroupId = userId;
+    share.AccountAccessLevel = 'Read'; // Edit Read All
+    share.OpportunityAccessLevel = 'None';
+    share.CaseAccessLevel = 'None';
+
+    // share.RowCause = 'CustomSharing'; // Important for delete
+    share.RowCause = Schema.AccountShare.RowCause.Manual; // Important for delete
+
+    return share;
+}
+
 //---------------------------------------------------------------------------------------------
 // Test MeetingShareService.getExistingShares()
 // List<Meeting__Share> meetingShares = MeetingShareService.getExistingShares(
@@ -67,8 +81,43 @@ Set<Id> meetingIds = new Set<Id>{
 // }
 //---------------------------------------------------------------------------------------------
 // Test MeetingShareService.removeMeetingAccess()
-List<Meeting__Share> meetingShares = MeetingShareService.removeMeetingAccess(
-    new Map<Id, Set<Id>>{userId => meetingIds}
+// List<Meeting__Share> meetingShares = MeetingShareService.removeMeetingAccess(
+//     new Map<Id, Set<Id>>{userId => meetingIds}
+// );
+
+// System.debug('-----meetingShares.size(): ' + meetingShares.size());
+// for (Integer i = 0; i < meetingShares.size(); i++) {
+//     System.debug('-----meetingShares[' + i + ']: ' + meetingShares[i]);
+// }
+//---------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------
+// Test MeetingShareService.getMeetingIdsByUserIdBasedOnAccountShares()
+// AccountShare accShare = createAccountShare(acc1_Id, standardUser1Id);
+
+// Map<Id, Set<Id>> meetingIdsByUserId = MeetingShareService.getMeetingIdsByUserIdBasedOnAccountShares(
+//     new List<AccountShare>{accShare}
+// );
+
+// System.debug('-----meetingIdsByUserId: ' + meetingIdsByUserId);
+//---------------------------------------------------------------------------------------------
+// Test MeetingShareService.grandAccessToAccountMeetings()
+// AccountShare accShare = createAccountShare(acc1_Id, standardUser1Id);
+
+// List<Meeting__Share> meetingShares = MeetingShareService.grandAccessToAccountMeetings(
+//     new List<AccountShare>{accShare}
+// );
+
+// System.debug('-----meetingShares.size(): ' + meetingShares.size());
+// for (Integer i = 0; i < meetingShares.size(); i++) {
+//     System.debug('-----meetingShares[' + i + ']: ' + meetingShares[i]);
+// }
+
+//---------------------------------------------------------------------------------------------
+// Test MeetingShareService.removeAccessFromAccountMeetings()
+AccountShare accShare = createAccountShare(acc1_Id, standardUser1Id);
+
+List<Meeting__Share> meetingShares = MeetingShareService.removeAccessFromAccountMeetings(
+    new List<AccountShare>{accShare}
 );
 
 System.debug('-----meetingShares.size(): ' + meetingShares.size());

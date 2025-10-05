@@ -6,6 +6,94 @@ public without sharing class MeetingShareService {
         , 'Owner'
     };
 
+    public static List<Meeting__Share> removeAccessFromAccountMeetings(List<AccountShare> accountShares) {
+        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
+
+        return removeMeetingAccess(meetingIdsByUserId);
+    }
+
+
+    // Checked Functional--------------------------------------------------------------------
+
+    public static List<Meeting__Share> grandAccessToAccountMeetings(List<AccountShare> accountShares) {
+        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
+
+        return grantMeetingAccess(meetingIdsByUserId);
+    }
+
+    public static Map<Id, Set<Id>> getMeetingIdsByUserIdBasedOnAccountShares(List<AccountShare> accountShares) {
+        Map<Id, Set<Id>> userIdsByAccountId = new Map<Id, Set<Id>>();
+        for (AccountShare share : accountShares) {
+            if (!userIdsByAccountId.containsKey(share.AccountId)) {
+                userIdsByAccountId.put(share.AccountId, new Set<Id>());
+            }
+            userIdsByAccountId.get(share.AccountId).add(share.UserOrGroupId);
+        }
+
+        List<Meeting__c> meetings = [
+            SELECT Id, OwnerId, Account__c, Name
+            FROM Meeting__c 
+            WHERE Account__c IN :userIdsByAccountId.keySet()
+        ];
+
+        Map<Id, List<Meeting__c>> meetingsByAccountId = new Map<Id, List<Meeting__c>>();
+        for (Meeting__c meeting : meetings) {
+            if (!meetingsByAccountId.containsKey(meeting.Account__c)) {
+                meetingsByAccountId.put(meeting.Account__c, new List<Meeting__c>());
+            }
+            meetingsByAccountId.get(meeting.Account__c).add(meeting);
+        }
+
+        Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
+        for (Id accountId : userIdsByAccountId.keySet()) {
+            Set<Id> userIds = userIdsByAccountId.get(accountId);
+            if (userIds == null || userIds.isEmpty()) {
+                continue;
+            }
+
+            List<Meeting__c> accountMeetings = meetingsByAccountId.get(accountId);
+            if (accountMeetings == null || accountMeetings.isEmpty()) {
+                continue;
+            }
+
+            for (Id userId : userIds) {
+                meetingIdsByUserId.put(userId, new Map<Id, Meeting__c>(accountMeetings).keySet());
+            }
+        }
+
+        return meetingIdsByUserId;
+    }
+
+
+    
+    // Checked Main--------------------------------------------------------------------
+    public static List<Meeting__Share> grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
+
+        Map<Id, Set<Id>> sharedMeetingIdsByUserId = getSharedMeetingIdsByUserId(
+            meetingIdsByUserId,
+            new List<String>{'CustomSharing__c', 'Owner'}
+        );
+
+        List<Meeting__Share> sharesToInsert = new List<Meeting__Share>();
+        for(Id userId : meetingIdsByUserId.keySet()) {
+            for (Id meetingId : meetingIdsByUserId.get(userId)) {
+                if (sharedMeetingIdsByUserId.get(userId)?.contains(meetingId) == true) {
+                    continue; // has access
+                }
+
+                sharesToInsert.add(createMeetingShare(userId, meetingId));
+            }
+        }
+        System.debug('-----sharesToInsert: ' + sharesToInsert);
+
+        //TODO
+        if (!sharesToInsert.isEmpty()) {
+            Database.insert(sharesToInsert, false);
+        }
+
+        return sharesToInsert;
+    }
+
     public static List<Meeting__Share> removeMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
 
         List<Meeting__Share> existingShares = getExistingShares(
@@ -32,38 +120,6 @@ public without sharing class MeetingShareService {
         }
 
         return sharesToDelete;
-    }
-
-    
-
-
-    
-    // Checked--------------------------------------------------------------------
-    public static List<Meeting__Share> grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
-
-        Map<Id, Set<Id>> sharedMeetingIdsByUserId = getSharedMeetingIdsByUserId(
-            meetingIdsByUserId,
-            new List<String>{'CustomSharing__c', 'Owner'}
-        );
-
-        List<Meeting__Share> sharesToInsert = new List<Meeting__Share>();
-        for(Id userId : meetingIdsByUserId.keySet()) {
-            for (Id meetingId : meetingIdsByUserId.get(userId)) {
-                if (sharedMeetingIdsByUserId.get(userId)?.contains(meetingId) == true) {
-                    continue; // has access
-                }
-
-                sharesToInsert.add(createMeetingShare(userId, meetingId));
-            }
-        }
-        System.debug('-----sharesToInsert: ' + sharesToInsert);
-
-        //TODO
-        if (!sharesToInsert.isEmpty()) {
-            Database.insert(sharesToInsert, false);
-        }
-
-        return sharesToInsert;
     }
 
     public static Map<Id, Set<Id>> getSharedMeetingIdsByUserId(
