@@ -29,20 +29,9 @@ public without sharing class MeetingShareService {
             }
             userIdsByAccountId.get(share.AccountId).add(share.UserOrGroupId);
         }
-
-        List<Meeting__c> meetings = [
-            SELECT Id, OwnerId, Account__c, Name
-            FROM Meeting__c 
-            WHERE Account__c IN :userIdsByAccountId.keySet()
-        ];
-
-        Map<Id, List<Meeting__c>> meetingsByAccountId = new Map<Id, List<Meeting__c>>();
-        for (Meeting__c meeting : meetings) {
-            if (!meetingsByAccountId.containsKey(meeting.Account__c)) {
-                meetingsByAccountId.put(meeting.Account__c, new List<Meeting__c>());
-            }
-            meetingsByAccountId.get(meeting.Account__c).add(meeting);
-        }
+        
+        //TODO use getMeetingIdsByAccountId() method
+        Map<Id, Set<Id>> meetingIdsByAccountIds = MeetingService.getMeetingIdsByAccountIds(userIdsByAccountId.keySet());
 
         Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
         for (Id accountId : userIdsByAccountId.keySet()) {
@@ -51,13 +40,13 @@ public without sharing class MeetingShareService {
                 continue;
             }
 
-            List<Meeting__c> accountMeetings = meetingsByAccountId.get(accountId);
+            Set<Id> accountMeetings = meetingIdsByAccountIds.get(accountId);
             if (accountMeetings == null || accountMeetings.isEmpty()) {
                 continue;
             }
 
             for (Id userId : userIds) {
-                meetingIdsByUserId.put(userId, new Map<Id, Meeting__c>(accountMeetings).keySet());
+                meetingIdsByUserId.put(userId, accountMeetings);
             }
         }
 
@@ -65,7 +54,6 @@ public without sharing class MeetingShareService {
     }
 
 
-    
     // Checked Main--------------------------------------------------------------------
     public static List<Meeting__Share> grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
 

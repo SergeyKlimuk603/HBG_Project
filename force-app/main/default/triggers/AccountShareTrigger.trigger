@@ -1,7 +1,7 @@
-trigger AccountShareTrigger on Meeting__Share (after insert, after delete) {
+trigger AccountShareTrigger on AccountShare (after insert, after delete) {
     if (Trigger.isAfter) {
         if (Trigger.isInsert) {
-            RegistrationHandlerNew.grantMeetingAccess(Trigger.new);
+            // RegistrationHandlerNew.grantMeetingAccess(Trigger.new);
         }
         if (Trigger.isDelete) {
 
