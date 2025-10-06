@@ -2,7 +2,9 @@ trigger AccountTrigger on Account (
     before insert, 
     after insert, 
     before update, 
-    after update
+    after update,
+    before delete, 
+    after delete
 ) {
     if (Trigger.isInsert) {
         if (Trigger.isBefore) {
@@ -19,6 +21,15 @@ trigger AccountTrigger on Account (
         }
         if (Trigger.isAfter) {
             AccountTriggerHandler.onAfterUpdate(Trigger.new, Trigger.oldMap);
+        }
+    }
+
+    if (Trigger.isDelete) {
+        if (Trigger.isBefore) {
+            AccountTriggerHandler.onBeforeDelete(Trigger.oldMap);
+        }
+        if (Trigger.isAfter) {
+            AccountTriggerHandler.onAfterDelete(Trigger.oldMap);
         }
     }
 }

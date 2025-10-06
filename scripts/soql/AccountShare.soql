@@ -1,5 +1,5 @@
 SELECT Account.Name, AccountAccessLevel, RowCause, UserOrGroup.Name
 FROM AccountShare
-WHERE Account.Name IN ('Meeting Account 1', 'Meeting Account 2')
+WHERE Account.Name IN ('Meeting Account 1', 'Meeting Account 2', 'Meeting 3')
 ORDER BY Account.Name
 LIMIT 200

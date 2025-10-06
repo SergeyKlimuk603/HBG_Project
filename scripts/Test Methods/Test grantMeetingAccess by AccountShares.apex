@@ -1,4 +1,4 @@
-Id standardUser1Id = '005J7000001hqAZ'; // 'StandardUser1'
+Id standardUser1Id = '005J7000001hqAZIAY'; // 'StandardUser1'
 Id myUserId = '0057Q0000081Ifw'; // 'Ian Lin'
 Id acc1_Id = '001J700000TjVxlIAF'; // 'Meeting Account 1'
 Id acc2_Id = '001J700000TjrEDIAZ'; // 'Meeting Account 2'
@@ -11,7 +11,8 @@ Id userId = standardUser1Id;
 
 //---------------------------------------------------------------------------------------------
 // AccountShare created
-AccountShare accountShare = createAccountShare(acc1_Id, userId);
+AccountShare accountShare = createAccountShare('001J700000TkBjDIAV', userId);
+insert accountShare;
 RegistrationHandlerNew.grantMeetingAccess(new List<AccountShare>{accountShare});
 //---------------------------------------------------------------------------------------------
 

@@ -30,7 +30,7 @@ public without sharing class MeetingShareService {
             userIdsByAccountId.get(share.AccountId).add(share.UserOrGroupId);
         }
         
-        //TODO use getMeetingIdsByAccountId() method
+        //TODO use getMeetingIdsByAccountIds() method
         Map<Id, Set<Id>> meetingIdsByAccountIds = MeetingService.getMeetingIdsByAccountIds(userIdsByAccountId.keySet());
 
         Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
