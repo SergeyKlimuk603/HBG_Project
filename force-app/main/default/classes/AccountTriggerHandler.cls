@@ -1,26 +1,10 @@
 public with sharing class AccountTriggerHandler {
-    public static void onBeforeInsert(List<Account> newAccounts) {
-        // TODO: Implement logic for before insert trigger
-    }
-
-    public static void onAfterInsert(List<Account> newAccounts) {
-        // TODO: Implement logic for after insert trigger
-    }
-
-    public static void onBeforeUpdate(List<Account> newAccounts, Map<Id, Account> oldAccountsMap) {
-        // TODO: Implement logic for before insert trigger
-    }
-
     public static void onAfterUpdate(List<Account> newAccounts, Map<Id, Account> oldAccountsMap) {
         recalculateMeetingSharesAfterOwnerChanged(newAccounts, oldAccountsMap);
     }
 
     public static void onBeforeDelete(Map<Id, Account> oldAccountsMap) {
         recalculateMeetingSharesAfterAccountDelete(oldAccountsMap);
-    }
-
-    public static void onAfterDelete(Map<Id, Account> oldAccountsMap) {
-        // TODO: Implement logic for before insert trigger
     }
 
     // Run in after context
@@ -58,12 +42,8 @@ public with sharing class AccountTriggerHandler {
             );
         }
 
-        List<Meeting__Share> removedMeetingShares = MeetingShareService.removeMeetingAccess(meetingIdsByUserIdForRemoveAccess);
-        List<Meeting__Share> grandMeetingShares = MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForGrandAccess);
-
-        System.debug('-----removedMeetingShares: ' + removedMeetingShares);
-        System.debug('-----grandMeetingShares: ' + grandMeetingShares);
-        System.debug('-----meetingIdsByAccountIds: ' + meetingIdsByAccountIds);
+        MeetingShareService.removeMeetingAccess(meetingIdsByUserIdForRemoveAccess);
+        MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForGrandAccess);
     }
 
     // Run in before context
@@ -76,18 +56,8 @@ public with sharing class AccountTriggerHandler {
                 AND RowCause IN :sharingRowCauses
         ];
 
-        System.debug('-----accountShares.size(): ' + accountShares.size());
-        for (Integer i = 0; i < accountShares.size(); i++) {
-            System.debug('-----accountShares[' + i + ']: ' + accountShares[i]);
-        }
-
         Map<Id, Set<Id>> meetingIdsByUserIds = MeetingShareService.getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
-
-        System.debug('-----111 meetingIdsByUserIds: ' + meetingIdsByUserIds);
-
-        List<Meeting__Share> removedMeetingShares = MeetingShareService.removeMeetingAccess(meetingIdsByUserIds);
-
-        System.debug('-----111 removedMeetingShares: ' + removedMeetingShares);
+        MeetingShareService.removeMeetingAccess(meetingIdsByUserIds);
     }
 
 

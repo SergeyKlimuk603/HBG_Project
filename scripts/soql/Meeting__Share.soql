@@ -1,5 +1,0 @@
-SELECT Parent.Name, AccessLevel, RowCause, UserOrGroup.Name
-FROM Meeting__Share
-WHERE Parent.Name IN ('Meeting 1-1', 'Meeting 1-2', 'Meeting 2-1', 'Meeting 2-2', 'Meeting 3-1', 'Meeting 3-2', 'Meeting 3-3')
-ORDER BY Parent.Name
-LIMIT 200

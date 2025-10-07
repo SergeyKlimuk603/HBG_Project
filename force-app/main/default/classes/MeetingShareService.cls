@@ -12,9 +12,6 @@ public without sharing class MeetingShareService {
         return removeMeetingAccess(meetingIdsByUserId);
     }
 
-
-    // Checked Functional--------------------------------------------------------------------
-
     public static List<Meeting__Share> grandAccessToAccountMeetings(List<AccountShare> accountShares) {
         Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
 
@@ -29,8 +26,7 @@ public without sharing class MeetingShareService {
             }
             userIdsByAccountId.get(share.AccountId).add(share.UserOrGroupId);
         }
-        
-        //TODO use getMeetingIdsByAccountIds() method
+
         Map<Id, Set<Id>> meetingIdsByAccountIds = MeetingService.getMeetingIdsByAccountIds(userIdsByAccountId.keySet());
 
         Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
@@ -53,8 +49,6 @@ public without sharing class MeetingShareService {
         return meetingIdsByUserId;
     }
 
-
-    // Checked Main--------------------------------------------------------------------
     public static List<Meeting__Share> grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
 
         Map<Id, Set<Id>> sharedMeetingIdsByUserId = getSharedMeetingIdsByUserId(
@@ -72,9 +66,7 @@ public without sharing class MeetingShareService {
                 sharesToInsert.add(createMeetingShare(userId, meetingId));
             }
         }
-        System.debug('-----sharesToInsert: ' + sharesToInsert);
 
-        //TODO
         if (!sharesToInsert.isEmpty()) {
             Database.insert(sharesToInsert, false);
         }
@@ -102,7 +94,6 @@ public without sharing class MeetingShareService {
             }
         }
 
-        //TODO
         if (!sharesToDelete.isEmpty()) {
             Database.delete(sharesToDelete, false);
         }
@@ -133,28 +124,6 @@ public without sharing class MeetingShareService {
         return sharedMeetingIdsByUserId;
     }
 
-    // public static Map<Id, Set<Id>> getExistMeetingShareIdsByUserId(
-    //     Map<Id, Set<Id>> meetingIdsByUserId,
-    //     List<String> sharingRowCauses
-    // ) {
-    //     List<Meeting__Share> existingShares = getExistingShares(meetingIdsByUserId, sharingRowCauses);
-
-    //     Map<Id, Set<Id>> meetingShareIdsByUserId = new Map<Id, Set<Id>>();
-    //     for (Meeting__Share meetingShare : existingShares) {
-    //         Id userId = meetingShare.UserOrGroupId;
-    //         if (meetingIdsByUserId.get(userId)?.contains(meetingShare.ParentId) != true){
-    //             continue;
-    //         }
-
-    //         if (!meetingShareIdsByUserId.containsKey(userId)) {
-    //             meetingShareIdsByUserId.put(userId, new Set<Id>());
-    //         }
-    //         meetingShareIdsByUserId.get(userId).add(meetingShare.Id);
-    //     }
-
-    //     return meetingShareIdsByUserId;
-    // }
-
     public static List<Meeting__Share> getExistingShares(
         Map<Id, Set<Id>> meetingIdsByUserId,
         List<String> sharingRowCauses
@@ -164,11 +133,6 @@ public without sharing class MeetingShareService {
         for(Id userId : userIds) {
             allMeetingIds.addAll(meetingIdsByUserId.get(userId));
         }
-
-        //TODO Delete
-        // System.debug('-----userIds: ' + userIds);
-        // System.debug('-----allMeetingIds: ' + allMeetingIds);
-        // System.debug('-----sharingRowCauses: ' + sharingRowCauses);
 
         List<Meeting__Share> existingShares = [
             SELECT Id, ParentId, UserOrGroupId, RowCause 

@@ -1,15 +1,7 @@
 public without sharing class MeetingTriggerHandler {
 
-
-    public static void onBeforeInsert(List<Meeting__c> newMeetings) {
-        // TODO: Implement logic for before insert trigger
-    }
-
     public static void onAfterInsert(List<Meeting__c> newMeetings) {
         shareByLinkedAccount(newMeetings, null);
-    }
-
-    public static void onBeforeUpdate(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
     }
 
     public static void onAfterUpdate(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
@@ -28,8 +20,8 @@ public without sharing class MeetingTriggerHandler {
                 }
                 newMeetingIdsByAccountId.get(newAccount).add(meeting.Id);
             }
+
             Id oldAccount = oldMeetings?.get(meeting.Id).Account__c;
-            System.debug('----- 23232 oldAccount: ' + oldAccount);
             if (String.isNotBlank(oldAccount)) {
                 if (!oldMeetingIdsByAccountId.containsKey(oldAccount)) {
                     oldMeetingIdsByAccountId.put(oldAccount, new Set<Id>());
@@ -37,9 +29,6 @@ public without sharing class MeetingTriggerHandler {
                 oldMeetingIdsByAccountId.get(oldAccount).add(meeting.Id);
             }
         }
-
-        System.debug('-----oldMeetingIdsByAccountId: ' + oldMeetingIdsByAccountId);
-        System.debug('-----newMeetingIdsByAccountId: ' + newMeetingIdsByAccountId);
 
         List<String> sharingRowCauses = new List<String>{'Manual', 'Owner'};
         List<AccountShare> accountShares = [
@@ -49,11 +38,6 @@ public without sharing class MeetingTriggerHandler {
                     OR AccountId IN :newMeetingIdsByAccountId.keySet())
                 AND RowCause IN :sharingRowCauses
         ];
-
-        System.debug('-----12 accountShares.size(): ' + accountShares.size());
-        for (Integer i = 0; i < accountShares.size(); i++) {
-            System.debug('-----accountShares[' + i + ']: ' + accountShares[i]);
-        }
 
         Map<Id, Set<Id>> meetingIdsByUserIdForRemoveShare = new Map<Id, Set<Id>>();
         Map<Id, Set<Id>> meetingIdsByUserIdForGrandShare = new Map<Id, Set<Id>>();
@@ -74,17 +58,8 @@ public without sharing class MeetingTriggerHandler {
             }
         }
 
-        List<Meeting__Share> removedMeetingShares = MeetingShareService.removeMeetingAccess(meetingIdsByUserIdForRemoveShare);
-        List<Meeting__Share> grandMeetingShares = MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForGrandShare);
-
-        System.debug('----- 45 removedMeetingShares.size(): ' + removedMeetingShares.size());
-        for (Integer i = 0; i < removedMeetingShares.size(); i++) {
-            System.debug('-----removedMeetingShares[' + i + ']: ' + removedMeetingShares[i]);
-        }
-        System.debug('-----46 grandMeetingShares.size(): ' + grandMeetingShares.size());
-        for (Integer i = 0; i < grandMeetingShares.size(); i++) {
-            System.debug('-----grandMeetingShares[' + i + ']: ' + grandMeetingShares[i]);
-        }
+        MeetingShareService.removeMeetingAccess(meetingIdsByUserIdForRemoveShare);
+        MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForGrandShare);
     }
 
     public static void shareForOldOwner(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
@@ -137,30 +112,6 @@ public without sharing class MeetingTriggerHandler {
             meetingIdsByUserIdForSharing.get(oldOwner).add(oldMeeting.Id);
         }
 
-        List<Meeting__Share> grandMeetingShares = MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForSharing);
-
-        System.debug('-----97 grandMeetingShares.size(): ' + grandMeetingShares.size());
-        for (Integer i = 0; i < grandMeetingShares.size(); i++) {
-            System.debug('-----grandMeetingShares[' + i + ']: ' + grandMeetingShares[i]);
-        }
-    }
-
-
-
-
-
-    //TODO delete this
-    public static List<Meeting__Share> getShares(Set<Id> meetingIds, String callMethod) {
-        List<Meeting__Share>  meetingShares = [
-            SELECT Id, ParentId, UserOrGroupId, UserOrGroup.Name, AccessLevel, RowCause
-            FROM Meeting__Share
-            WHERE ParentId IN :Trigger.new
-        ];
-
-        for (Meeting__Share meetingShare : meetingShares) {
-            System.debug('-----' + callMethod + ' meetingShare: ' + meetingShare);
-        }
-
-        return meetingShares;
+        MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForSharing);
     }
 }
