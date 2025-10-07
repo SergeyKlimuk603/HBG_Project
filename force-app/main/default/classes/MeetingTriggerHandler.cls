@@ -10,16 +10,11 @@ public without sharing class MeetingTriggerHandler {
     }
 
     public static void onBeforeUpdate(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
-        
-        //TODO delete this
-        getShares(oldMeetings.keySet(), 'onBeforeUpdate');
     }
 
     public static void onAfterUpdate(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
         shareByLinkedAccount(newMeetings, oldMeetings);
-
-        //TODO delete this
-        getShares(oldMeetings.keySet(), 'onAfterUpdate');
+        shareForOldOwner(newMeetings, oldMeetings);
     }
 
     public static void shareByLinkedAccount(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
@@ -92,23 +87,63 @@ public without sharing class MeetingTriggerHandler {
         }
     }
 
-    // public static List<Meeting__Share> shareIfLinkedToAccountDuringCreate(List<Meeting__c> newMeetings) {
-    //     Map<Id, Set<Id>> meetingIdsByAccountId = new Map<Id, Set<Id>>();
-    //     for (Meeting__c meeting : newMeetings) {
-    //         if (String.isBlank(meeting.Account__c)) {
-    //             continue;
-    //         }
-    //         linkedToAccount.add(meeting);
-    //     }
+    public static void shareForOldOwner(List<Meeting__c> newMeetings, Map<Id, Meeting__c> oldMeetings) {
+        List<Meeting__c> ownerChangedOldMeetings = new List<Meeting__c>();
+        for (Meeting__c meeting : newMeetings) {
+            Meeting__c oldMeeting = oldMeetings.get(meeting.Id);
+            if (meeting.OwnerId != oldMeeting.OwnerId && String.isNotBlank(oldMeeting.Account__c)) {
+                ownerChangedOldMeetings.add(oldMeeting);
+            }
+        }
 
-    //     if (linkedToAccount.isEmpty()) {
-    //         return;
-    //     }
+        if (ownerChangedOldMeetings.isEmpty()) {
+            return;
+        }
 
+        List<Id> linkedAccountIds = new List<Id>();
+        List<Id> oldOwnerIds = new List<Id>();
+        for (Meeting__c meeting : ownerChangedOldMeetings) {
+            linkedAccountIds.add(meeting.Account__c);
+            oldOwnerIds.add(meeting.OwnerId);
+        }
 
+        List<AccountShare> accountShares = [
+            SELECT Id, AccountId, UserOrGroupId, RowCause
+            FROM AccountShare
+            WHERE AccountId IN :linkedAccountIds
+                AND UserOrGroupId IN :oldOwnerIds
+                AND RowCause IN :new List<String>{'Manual', 'Owner'}
+        ];
 
+        Map<Id, Set<Id>> sharedAccountIdsByUserIds = new Map<Id, Set<Id>>();
+        for (AccountShare accountShare : accountShares) {
+            if (!sharedAccountIdsByUserIds.containsKey(accountShare.UserOrGroupId)) {
+                sharedAccountIdsByUserIds.put(accountShare.UserOrGroupId, new Set<Id>());
+            }
+            sharedAccountIdsByUserIds.get(accountShare.UserOrGroupId).add(accountShare.AccountId);
+        }
 
-    // }
+        Map<Id, Set<Id>> meetingIdsByUserIdForSharing = new Map<Id, Set<Id>>();
+        for (Meeting__c oldMeeting : ownerChangedOldMeetings) {
+            Id oldOwner = oldMeeting.OwnerId;
+            Set<Id> sharedAccounts = sharedAccountIdsByUserIds.get(oldOwner);
+            if (sharedAccounts?.contains(oldMeeting.Account__c) != true) {
+                continue;
+            }
+
+            if (!meetingIdsByUserIdForSharing.containsKey(oldOwner)) {
+                meetingIdsByUserIdForSharing.put(oldOwner, new Set<Id>());
+            }
+            meetingIdsByUserIdForSharing.get(oldOwner).add(oldMeeting.Id);
+        }
+
+        List<Meeting__Share> grandMeetingShares = MeetingShareService.grantMeetingAccess(meetingIdsByUserIdForSharing);
+
+        System.debug('-----97 grandMeetingShares.size(): ' + grandMeetingShares.size());
+        for (Integer i = 0; i < grandMeetingShares.size(); i++) {
+            System.debug('-----grandMeetingShares[' + i + ']: ' + grandMeetingShares[i]);
+        }
+    }
 
 
 
