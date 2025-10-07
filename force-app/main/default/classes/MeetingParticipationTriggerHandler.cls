@@ -4,7 +4,7 @@ public with sharing class MeetingParticipationTriggerHandler {
     }
 
     public static void onAfterInsert(List<Meeting_Participation__c> newParticipations) {
-        shareByLinkedUser(newParticipations, null);
+        grantMeetingShare(newParticipations);
     }
 
     public static void onBeforeUpdate(List<Meeting_Participation__c> newParticipations, Map<Id, Meeting_Participation__c> oldParticipationsMap) {
@@ -15,24 +15,26 @@ public with sharing class MeetingParticipationTriggerHandler {
         shareByLinkedUser(newParticipations, oldParticipationsMap);
     }
 
-    public static void onBeforeDelete(Map<Id, Meeting_Participation__c> newParticipations) {
+    public static void onBeforeDelete(Map<Id, Meeting_Participation__c> oldParticipationsMap) {
         
     }
 
-    public static void onAfterDelete(Map<Id, Meeting_Participation__c> newParticipations) {
-        // TODO: Implement logic for before insert trigger
+    public static void onAfterDelete(Map<Id, Meeting_Participation__c> oldParticipationsMap) {
+        removeMeetingShare(oldParticipationsMap.values());
     }
 
     public static void shareByLinkedUser(
         List<Meeting_Participation__c> newParticipations, 
         Map<Id, Meeting_Participation__c> oldParticipationsMap
     ) {
+        List<Meeting_Participation__c> changedOldUserParticipations = new List<Meeting_Participation__c>();
         List<Meeting_Participation__c> changedUserParticipations = new List<Meeting_Participation__c>();
         for (Meeting_Participation__c participant : newParticipations) {
-            if (participant.User__c == oldParticipationsMap?.get(participant.Id).User__c) {
+            if (participant.User__c == oldParticipationsMap.get(participant.Id).User__c) {
                 continue;
             }
 
+            changedOldUserParticipations.add(oldParticipationsMap.get(participant.Id));
             changedUserParticipations.add(participant);
         }
 
@@ -41,32 +43,31 @@ public with sharing class MeetingParticipationTriggerHandler {
         }
 
         //---------------------------------------------------------------------------------------------
-        
-        
+
+        List<Meeting__Share> removedMeetingShares = removeMeetingShare(changedOldUserParticipations);
+        List<Meeting__Share> grandMeetingShares = grantMeetingShare(changedUserParticipations);
+
+        System.debug('----- 55 removedMeetingShares.size(): ' + removedMeetingShares.size());
+        for (Integer i = 0; i < removedMeetingShares.size(); i++) {
+            System.debug('-----removedMeetingShares[' + i + ']: ' + removedMeetingShares[i]);
+        }
+        System.debug('-----56 grandMeetingShares.size(): ' + grandMeetingShares.size());
+        for (Integer i = 0; i < grandMeetingShares.size(); i++) {
+            System.debug('-----grandMeetingShares[' + i + ']: ' + grandMeetingShares[i]);
+        }
+    }
+
+    // old
+    public static List<Meeting__Share> removeMeetingShare(List<Meeting_Participation__c> participations) {
         Set<Id> meetingIds = new Set<Id>();
         Map<Id, Set<Id>> meetingIdsByOldUserIds = new Map<Id, Set<Id>>();
-        Map<Id, Set<Id>> meetingIdsByNewUserIds = new Map<Id, Set<Id>>();
-        for (Meeting_Participation__c participant : changedUserParticipations) {
-            
-            Id oldUserId = oldParticipationsMap?.get(participant.Id).User__c;
-            Id oldMeetingId = oldParticipationsMap?.get(participant.Id).Meeting__c;
+        for (Meeting_Participation__c participant : participations) {
+            Id oldUserId = participant.User__c;
+            Id oldMeetingId = participant.Meeting__c;
             if (oldUserId != null && oldMeetingId != null) {
                 meetingIds.add(oldMeetingId);
                 Util.addValueToMapOfSets(meetingIdsByOldUserIds, oldUserId, oldMeetingId);
             }
-
-
-            Id newUserId = participant.User__c;
-            if (newUserId != null) {
-                Util.addValueToMapOfSets(meetingIdsByNewUserIds, newUserId, participant.Meeting__c);
-            }
-            // Id newUserId = participant.User__c;
-            // if (newUserId != null) {
-            //     if (!meetingIdsByNewUserIds.containsKey(newUserId)) {
-            //         meetingIdsByNewUserIds.put(newUserId, new Set<Id>());
-            //     }
-            //     meetingIdsByNewUserIds.get(newUserId).add(participant.Meeting__c);
-            // }
         }
 
         List<Meeting__c> meetings = [
@@ -110,15 +111,21 @@ public with sharing class MeetingParticipationTriggerHandler {
         }
 
         List<Meeting__Share> removedMeetingShares = MeetingShareService.removeMeetingAccess(meetingIdsByUserIdForRemoveShares);
+
+        return removedMeetingShares;
+    }
+
+    public static List<Meeting__Share> grantMeetingShare(List<Meeting_Participation__c> participations) {
+        Map<Id, Set<Id>> meetingIdsByNewUserIds = new Map<Id, Set<Id>>();
+        for (Meeting_Participation__c participant : participations) {
+            Id newUserId = participant.User__c;
+            if (newUserId != null) {
+                Util.addValueToMapOfSets(meetingIdsByNewUserIds, newUserId, participant.Meeting__c);
+            }
+        }
+
         List<Meeting__Share> grandMeetingShares = MeetingShareService.grantMeetingAccess(meetingIdsByNewUserIds);
 
-        System.debug('----- 55 removedMeetingShares.size(): ' + removedMeetingShares.size());
-        for (Integer i = 0; i < removedMeetingShares.size(); i++) {
-            System.debug('-----removedMeetingShares[' + i + ']: ' + removedMeetingShares[i]);
-        }
-        System.debug('-----56 grandMeetingShares.size(): ' + grandMeetingShares.size());
-        for (Integer i = 0; i < grandMeetingShares.size(); i++) {
-            System.debug('-----grandMeetingShares[' + i + ']: ' + grandMeetingShares[i]);
-        }
+        return grandMeetingShares;
     }
 }
