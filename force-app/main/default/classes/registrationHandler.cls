@@ -4,6 +4,10 @@
  * @testclass: registrationHandlerTest
  * @author david.lewakis@mindsquare.de
  * @data 04.07.2025
+ * *
+ * @modifiedBy  : Andrei Pivavarchyk (mindsquare GmbH)
+ * @modifiedDate: 10.09.2025
+ * @modification: Extended logic for meeting sharing and updated related tests
 *****************************************************************/
 
 global without sharing class registrationHandler implements Auth.RegistrationHandler {
@@ -13,6 +17,8 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
     private static final String STANDARD_PERMISSION_SET = 'HBG_Standard_Permissions';
     @TestVisible
     private static final String VIEW_ALL_PERMISSION_SET = 'HBG_View_All_Accounts';
+    @TestVisible
+    private static final String VIEW_ALL_MEETINGS_PERMISSION_SET = 'HBG_View_All_Meetings';
     @TestVisible
     private static final String DOCUMENTS_STANDARD_USER_PERMISSION_SET = 'dvelop_standard';
     @TestVisible
@@ -28,7 +34,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         setBasicAttributes(user, data);
 
         Profile pofile = [SELECT Id FROM Profile WHERE Name = :PROFILE_NAME LIMIT 1];
-        
+
         user.ProfileId = pofile.Id;
         user.LanguageLocaleKey = 'de';
         user.LocaleSidKey = 'de_DE';
@@ -37,10 +43,14 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
 
         insert user;
 
-        assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET});
         assignUserPackageLicense(user.Id, new Set<String>{ PACKAGE_LICENSE_DOCUMENTS_NAME_SPACE });
 
-        setAccessToAccounts(user, data);
+        if (data.idTokenJSONString != null && data.idTokenJSONString.contains(ALL_ACCESS_ROLE)) {
+            assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET, VIEW_ALL_PERMISSION_SET,VIEW_ALL_MEETINGS_PERMISSION_SET});
+        }else{
+            assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET});
+            getManufactureIdsAndGrantAcess(user, data);
+        }
 
         return user;
     }
@@ -50,10 +60,15 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         User user = new User(Id = userId);
 
         setBasicAttributes(user, data);
-        assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET});
+
         assignUserPackageLicense(user.Id, new Set<String>{ PACKAGE_LICENSE_DOCUMENTS_NAME_SPACE });
 
-        setAccessToAccounts(user, data);
+        if (data.idTokenJSONString != null && data.idTokenJSONString.contains(ALL_ACCESS_ROLE)) {
+            assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET, VIEW_ALL_PERMISSION_SET,VIEW_ALL_MEETINGS_PERMISSION_SET});
+        }else{
+            assignUserPermissionSet(user.Id, new Set<String>{DOCUMENTS_STANDARD_USER_PERMISSION_SET, MEETING_PERMISSION_SET, STANDARD_PERMISSION_SET});
+            getManufactureIdsAndGrantAcess(user, data);
+        }
 
         update user;
     }
@@ -73,7 +88,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
             throw new IllegalArgumentException('Username is missing!');
         }
         user.Username = data.attributeMap.get('username');
-        
+
         if (data.attributeMap.get('email') == null) {
             throw new IllegalArgumentException('E-Mail is missing!');
         }
@@ -86,7 +101,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         user.LastName = data.lastName;
 
         String alias =  String.isNotBlank(user.FirstName) ? user.FirstName.substring(0, 1) + user.LastName : user.LastName;
-        
+
         if (alias.length() > 8){
             alias = alias.substring(0, 8);
         }
@@ -96,7 +111,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         if (data.attributeMap.get('sub') != null) {
             user.KeyCloackId__c = data.attributeMap.get('sub');
         }
-        
+
         if (data.attributeMap.get('mandantID') != null) {
             user.MandantId__c = data.attributeMap.get('mandantID');
         }
@@ -206,56 +221,12 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         insert licenseAssignmentToInsert;
     }
 
-    @Future
-    private static void assignStandardPermissionSet(Id userId) {
-        List<PermissionSet> standardPs = [SELECT Id FROM PermissionSet WHERE Name = :STANDARD_PERMISSION_SET LIMIT 1];
-
-        if (standardPs.isEmpty()) {
-            return;
-        }
-
-        List<PermissionSetAssignment> existingAssignments = [SELECT Id FROM PermissionSetAssignment WHERE AssigneeId = :userId AND PermissionSetId = :standardPs.get(0).Id];
-
-        if (existingAssignments.isEmpty()) {
-            insert new PermissionSetAssignment(
-                AssigneeId = userId,
-                PermissionSetId = standardPs.get(0).Id
-            );
-        }
-    }
-
-    @Future
-    private static void assignViewAllAcoountsPermission(Id userId) {
-        List<PermissionSet> viewAllAcoountsPs = [SELECT Id FROM PermissionSet WHERE Name = :VIEW_ALL_PERMISSION_SET LIMIT 1];
-
-        if (viewAllAcoountsPs.isEmpty()) {
-            return;
-        }
-
-        List<PermissionSetAssignment> existingAssignments = [SELECT Id FROM PermissionSetAssignment WHERE AssigneeId = :userId AND PermissionSetId = :viewAllAcoountsPs.get(0).Id];
-
-        if (existingAssignments.isEmpty()) {
-            insert new PermissionSetAssignment(
-                AssigneeId = userId,
-                PermissionSetId = viewAllAcoountsPs.get(0).Id
-            );
-        }
-    }
-
-    private static void setAccessToAccounts(User user,  Auth.UserData data) {
-        if (data.idTokenJSONString != null && data.idTokenJSONString.contains(ALL_ACCESS_ROLE)) {
-            assignViewAllAcoountsPermission(user.Id);
-        } else {
-            getManufactureIdsAndGrantAcess(user, data);
-        }
-    }
-
     private static void getManufactureIdsAndGrantAcess(User user,  Auth.UserData data) {
         List<String> manufactureIds = getAccountIdsTheUserShouldHaveAccessTo(data);
         grantAndRemoveAccountAccess(user.Id, manufactureIds);
     }
 
-    private static List<String> getAccountIdsTheUserShouldHaveAccessTo(Auth.UserData data) {        
+    private static List<String> getAccountIdsTheUserShouldHaveAccessTo(Auth.UserData data) {
         List<String> manufactureIds = new List<String>();
 
         if (data.idTokenJSONString.contains('SF-Sparte')) {
@@ -274,12 +245,12 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         Map<String, Object> tokenMap = (Map<String, Object>) JSON.deserializeUntyped(data.idTokenJSONString);
 
 		List<Object> devisionList = (List<Object>) tokenMap.get('SF-Sparte');
-        
+
         for (Object devision : devisionList) {
             Map<String, Object> devisionParsed = (Map<String, Object>) devision;
             if (devisionParsed.containsKey('Hersteller')) {
                 List<Object> manufactureList = (List<Object>) devisionParsed.get('Hersteller');
-                
+
                 for (Object manufacture : manufactureList) {
                     Map<String, Object> manufactureParsed = (Map<String, Object>) manufacture;
                     String id = (String) manufactureParsed.get('ManufacturerID');
@@ -295,10 +266,10 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         Map<String, Object> tokenMap = (Map<String, Object>) JSON.deserializeUntyped(data.idTokenJSONString);
 
 		List<Object> manufactureList = (List<Object>) tokenMap.get('KAM-Manufacturer');
-        
+
         for (Object manufacture : manufactureList) {
             Map<String, Object> manufactureParsed = (Map<String, Object>) manufacture;
-            
+
             String id = (String) manufactureParsed.get('ManufacturerID');
             manufactureIds.add(id);
         }
@@ -309,19 +280,19 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         if (manufactureIds.isEmpty()) {
             return;
         }
-     
+
         List<Account> targetAccounts = [SELECT Id, ManufacturerId__c FROM Account WHERE ManufacturerId__c IN :manufactureIds];
-        
+
         Set<Id> targetAccountIds = new Set<Id>();
-        
+
         for (Account acc : targetAccounts) {
             targetAccountIds.add(acc.Id);
         }
 
-        List<AccountShare> existingShares = [SELECT Id, AccountId FROM AccountShare WHERE UserOrGroupId = :userId AND RowCause = 'Manual']; // Or 'ExplicitUser' if not using RowCause
-        
+        List<AccountShare> existingShares = [SELECT Id, AccountId,UserOrGroupId FROM AccountShare WHERE UserOrGroupId = :userId AND RowCause = 'Manual']; // Or 'ExplicitUser' if not using RowCause
+
         Set<Id> existingAccountIds = new Set<Id>();
-        
+
         for (AccountShare share : existingShares) {
             existingAccountIds.add(share.AccountId);
         }
@@ -330,7 +301,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         sharesToRemove.removeAll(targetAccountIds);
 
         List<AccountShare> sharesToDelete = new List<AccountShare>();
-        
+
         for (AccountShare share : existingShares) {
             if (sharesToRemove.contains(share.AccountId)) {
                 sharesToDelete.add(share);
@@ -349,10 +320,13 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
 
         if (!sharesToDelete.isEmpty()) {
             Database.delete(sharesToDelete, false);
+            MeetingShareService.removeAccessFromAccountMeetings(sharesToDelete);
         }
 
         if (!sharesToInsert.isEmpty()) {
             Database.insert(sharesToInsert, false);
+            system.debug('account sharesToInsert:'+sharesToInsert);
+            MeetingShareService.grantAccessToAccountMeetings(sharesToInsert);
         }
     }
 
@@ -364,7 +338,7 @@ global without sharing class registrationHandler implements Auth.RegistrationHan
         share.OpportunityAccessLevel = 'None';
         share.CaseAccessLevel = 'None';
         share.RowCause = Schema.AccountShare.RowCause.Manual; // Important for delete
-        
+
         return share;
     }
 }

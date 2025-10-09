@@ -1,44 +1,79 @@
+/****************************************************************************************************
+* Class MeetingShareService
+*
+*   Create By   :  Andrei Pivavarchyk (mindsquare GmbH)
+*   Create Date :  10.09.2025
+*   Description :  MeetingShareService contains logic to share meetings based on different conditions
+*
+*   Modification Log:
+*   -------------------------------------------------------------------------------------------------
+*   * Developer                             Date           Description
+*   * -----------------------------------------------------------------------------------------------
+*   * Andrei Pivavarchyk (mindsquare GmbH)  10.09.2025     Init version.
+****************************************************************************************************/
+
 public without sharing class MeetingShareService {
 
-    private static List<String> sharingRowCauses = new List<String>{
-        'CustomSharing__c'
-        // , 'Manual'
-        , 'Owner'
-    };
+    public static void removeAccessFromAccountMeetings(List<AccountShare> accountShareRecords) {
+        if (accountShareRecords == null || accountShareRecords.isEmpty()) return;
 
-    public static List<Meeting__Share> removeAccessFromAccountMeetings(List<AccountShare> accountShares) {
-        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
+        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShareRecords);
+        Map<Id, Set<Id>> filteredMeetingIdsByUserId = removeMeetingIdsWhereUserParticipant(meetingIdsByUserId);
 
-        return removeMeetingAccess(meetingIdsByUserId);
+        removeMeetingAccess(filteredMeetingIdsByUserId);
     }
 
+    public static Map<Id, Set<Id>> removeMeetingIdsWhereUserParticipant(Map<Id, Set<Id>> meetingIdsByUserId) {
+        Map<Id, Set<Id>> filteredMeetingIdsByUserId = new Map<Id, Set<Id>>();
+        if (meetingIdsByUserId == null || meetingIdsByUserId.isEmpty()) {
+            return filteredMeetingIdsByUserId;
+        }
 
-    // Checked Functional--------------------------------------------------------------------
+        Map<Id, Set<Id>> participantMeetingIdsByUserId = new Map<Id, Set<Id>>();
+        participantMeetingIdsByUserId = getParticipantMeetingIdsByUserId (meetingIdsByUserId);
 
-    public static List<Meeting__Share> grandAccessToAccountMeetings(List<AccountShare> accountShares) {
-        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShares);
-
-        return grantMeetingAccess(meetingIdsByUserId);
+        for (Id userId : meetingIdsByUserId.keySet()) {
+            Set<Id> meetingIds = meetingIdsByUserId.get(userId);
+            Set<Id> meetingIdsWhereUserParticipant = participantMeetingIdsByUserId.get(userId);
+            if (filteredMeetingIdsByUserId.get(userId) == null) {
+                filteredMeetingIdsByUserId.put(userId, new Set<Id>());
+            }
+            for (Id meetingToCheckId : meetingIds) {
+                if (meetingIdsWhereUserParticipant == null || !meetingIdsWhereUserParticipant.contains(meetingToCheckId)) {
+                    filteredMeetingIdsByUserId.get(userId).add(meetingToCheckId);
+                }
+            }
+        }
+        return filteredMeetingIdsByUserId;
     }
 
-    public static Map<Id, Set<Id>> getMeetingIdsByUserIdBasedOnAccountShares(List<AccountShare> accountShares) {
+    public static void grantAccessToAccountMeetings(List<AccountShare> accountShareRecords) {
+        if (accountShareRecords == null || accountShareRecords.isEmpty()) return;
+
+        Map<Id, Set<Id>> meetingIdsByUserId = getMeetingIdsByUserIdBasedOnAccountShares(accountShareRecords);
+        System.debug('TESTDEBIG_meetingIdsByUserId:'+meetingIdsByUserId);
+        grantMeetingAccess(meetingIdsByUserId);
+    }
+
+    public static Map<Id, Set<Id>> getMeetingIdsByUserIdBasedOnAccountShares(List<AccountShare> accountShareRecords) {
+        Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
         Map<Id, Set<Id>> userIdsByAccountId = new Map<Id, Set<Id>>();
-        for (AccountShare share : accountShares) {
+        Map<Id, Set<Id>> meetingIdsByAccountIds = new Map<Id, Set<Id>>();
+
+        if (accountShareRecords == null || accountShareRecords.isEmpty()) return meetingIdsByUserId;
+
+        for (AccountShare share : accountShareRecords) {
             if (!userIdsByAccountId.containsKey(share.AccountId)) {
                 userIdsByAccountId.put(share.AccountId, new Set<Id>());
             }
             userIdsByAccountId.get(share.AccountId).add(share.UserOrGroupId);
         }
-        
-        //TODO use getMeetingIdsByAccountIds() method
-        Map<Id, Set<Id>> meetingIdsByAccountIds = MeetingService.getMeetingIdsByAccountIds(userIdsByAccountId.keySet());
 
-        Map<Id, Set<Id>> meetingIdsByUserId = new Map<Id, Set<Id>>();
+        meetingIdsByAccountIds = getMeetingIdsByAccountIds(userIdsByAccountId.keySet());
+
+        System.debug('TESTDEBIG_meetingIdsByAccountIds:'+meetingIdsByAccountIds);
         for (Id accountId : userIdsByAccountId.keySet()) {
             Set<Id> userIds = userIdsByAccountId.get(accountId);
-            if (userIds == null || userIds.isEmpty()) {
-                continue;
-            }
 
             Set<Id> accountMeetings = meetingIdsByAccountIds.get(accountId);
             if (accountMeetings == null || accountMeetings.isEmpty()) {
@@ -46,149 +81,172 @@ public without sharing class MeetingShareService {
             }
 
             for (Id userId : userIds) {
-                meetingIdsByUserId.put(userId, accountMeetings);
+                if(meetingIdsByUserId.get(userId)==null){
+                    meetingIdsByUserId.put(userId, new Set<Id>());
+                }
+                meetingIdsByUserId.get(userId).addAll(accountMeetings);
             }
         }
 
         return meetingIdsByUserId;
     }
 
+    public static Map<Id, Set<Id>> getMeetingIdsByAccountIds(Set<Id> accountIds) {
+        Map<Id, Set<Id>> meetingIdsByAccountIds = new Map<Id, Set<Id>>();
+        if (accountIds == null || accountIds.isEmpty()) return meetingIdsByAccountIds;
 
-    // Checked Main--------------------------------------------------------------------
-    public static List<Meeting__Share> grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
+        List<Meeting__c> meetings = [
+                SELECT Id, Company__c
+                FROM Meeting__c
+                WHERE Company__c IN :accountIds
+        ];
 
-        Map<Id, Set<Id>> sharedMeetingIdsByUserId = getSharedMeetingIdsByUserId(
-            meetingIdsByUserId,
-            new List<String>{'CustomSharing__c', 'Owner'}
-        );
 
-        List<Meeting__Share> sharesToInsert = new List<Meeting__Share>();
-        for(Id userId : meetingIdsByUserId.keySet()) {
-            for (Id meetingId : meetingIdsByUserId.get(userId)) {
-                if (sharedMeetingIdsByUserId.get(userId)?.contains(meetingId) == true) {
-                    continue; // has access
+        for (Meeting__c meeting : meetings) {
+            if (!meetingIdsByAccountIds.containsKey(meeting.Company__c)) {
+                meetingIdsByAccountIds.put(meeting.Company__c, new Set<Id>());
+            }
+            meetingIdsByAccountIds.get(meeting.Company__c).add(meeting.Id);
+        }
+
+        return meetingIdsByAccountIds;
+    }
+
+    public static void grantMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
+        if (meetingIdsByUserId == null || meetingIdsByUserId.isEmpty()) return;
+        System.debug('TESTDEBIG_meetingIdsByUserId:'+meetingIdsByUserId);
+        List<Meeting__Share> shareRecordsToInsert = new List<Meeting__Share>();
+
+        Map<Id, List<Meeting__Share>> existingMeetingShareRecordsByUserId = getExistingMeetingShareRecordsByUserId(
+                meetingIdsByUserId,
+                new List<String>{
+                        'Manual', 'Owner'
                 }
+        );
+        System.debug('TESTDEBIG_existingMeetingShareRecordsByUserId:'+existingMeetingShareRecordsByUserId);
+        for (Id userId : meetingIdsByUserId.keySet()) {
+            Set<Id> userMeetingsIdsToShare = meetingIdsByUserId.get(userId);
+            Set<Id> alreadySharedMeetingIds = new Set<Id>();
+            if (userMeetingsIdsToShare == null) continue;
+            System.debug('TESTDEBIG_userMeetingsIdsToShare_1:');
+            System.debug('TESTDEBIG_userId:'+userId);
+            List<Meeting__Share> existingShareRecords = existingMeetingShareRecordsByUserId.get(userId);
+            System.debug('TESTDEBIG_existingShareRecords:'+existingShareRecords);
 
-                sharesToInsert.add(createMeetingShare(userId, meetingId));
+            if(existingShareRecords!=null){
+                for (Meeting__Share shareRecord : existingShareRecords) {
+                    alreadySharedMeetingIds.add(shareRecord.ParentId);
+                }
+            }
+
+
+            for (Id meetingId : userMeetingsIdsToShare) {
+
+                if (alreadySharedMeetingIds.contains(meetingId)) {
+                    continue;
+                }
+                shareRecordsToInsert.add(createMeetingShare(userId, meetingId));
             }
         }
-        System.debug('-----sharesToInsert: ' + sharesToInsert);
-
-        //TODO
-        if (!sharesToInsert.isEmpty()) {
-            Database.insert(sharesToInsert, false);
-        }
-
-        return sharesToInsert;
+        System.debug('TESTDEBIG_insert shareRecordsToInsert;:'+existingMeetingShareRecordsByUserId);
+        insert shareRecordsToInsert;
     }
 
-    public static List<Meeting__Share> removeMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
+    public static void removeMeetingAccess(Map<Id, Set<Id>> meetingIdsByUserId) {
+        if (meetingIdsByUserId == null || meetingIdsByUserId.isEmpty()) return;
 
-        List<Meeting__Share> existingShares = getExistingShares(
-            meetingIdsByUserId, 
-            new List<String>{'CustomSharing__c'}
+        Map<Id, List<Meeting__Share>> existingMeetingShareRecordsByUserId = getExistingMeetingShareRecordsByUserId(
+                meetingIdsByUserId,
+                new List<String>{
+                        'Manual'
+                }
         );
 
-        List<Meeting__Share> sharesToDelete = new List<Meeting__Share>();
+        List<Meeting__Share> allShareRecordIdsToDelete = new List<Meeting__Share>();
 
-        for (Meeting__Share share : existingShares) {
-            Set<Id> meetingIds = meetingIdsByUserId.get(share.UserOrGroupId);
-            if (meetingIds == null || meetingIds.isEmpty()) {
-                continue;
-            }
+        for (Id userId : existingMeetingShareRecordsByUserId.keySet()) {
 
-            if (meetingIds.contains(share.ParentId)) {
-                sharesToDelete.add(share);
-            }
+            allShareRecordIdsToDelete.addAll(existingMeetingShareRecordsByUserId.get(userId));
         }
-
-        //TODO
-        if (!sharesToDelete.isEmpty()) {
-            Database.delete(sharesToDelete, false);
-        }
-
-        return sharesToDelete;
+        delete allShareRecordIdsToDelete;
     }
 
-    public static Map<Id, Set<Id>> getSharedMeetingIdsByUserId(
-        Map<Id, Set<Id>> meetingIdsByUserId,
-        List<String> sharingRowCauses
-    ) {
-        List<Meeting__Share> existingShares = getExistingShares(meetingIdsByUserId, sharingRowCauses);
 
-        Map<Id, Set<Id>> sharedMeetingIdsByUserId = new Map<Id, Set<Id>>();
-        for (Meeting__Share meetingShare : existingShares) {
-            Id userId = meetingShare.UserOrGroupId;
-            Id meetingId = meetingShare.ParentId;
-            if (meetingIdsByUserId.get(userId)?.contains(meetingId) != true){
-                continue;
-            }
+    public static Map<Id, Set<Id>> getParticipantMeetingIdsByUserId(Map<Id, Set<Id>> meetingIdsByUserId) {
+        Map<Id, Set<Id>> participantMeetingIdsByUserId = new Map<Id, Set<Id>>();
+        if (meetingIdsByUserId == null || meetingIdsByUserId.isEmpty()) {
+            return participantMeetingIdsByUserId;
+        }
+        Set<Id> allMeetings = new Set<Id>();
 
-            if (!sharedMeetingIdsByUserId.containsKey(userId)) {
-                sharedMeetingIdsByUserId.put(userId, new Set<Id>());
-            }
-            sharedMeetingIdsByUserId.get(userId).add(meetingId);
+        for (Id userId : meetingIdsByUserId.keySet()) {
+            allMeetings.addAll(meetingIdsByUserId.get(userId));
         }
 
-        return sharedMeetingIdsByUserId;
+        List<Attendee__c> meetingParticipants = [
+                SELECT Id, Meeting__c, User__c
+                FROM Attendee__c
+                WHERE User__c IN :meetingIdsByUserId.keySet()
+                AND Meeting__c IN :allMeetings
+        ];
+
+        for (Attendee__c meetingParticipant : meetingParticipants) {
+            Id meetingId = meetingParticipant.Meeting__c;
+            Id userId = meetingParticipant.User__c;
+            if (!participantMeetingIdsByUserId.containsKey(userId)) {
+                participantMeetingIdsByUserId.put(userId, new Set<Id>());
+            }
+            participantMeetingIdsByUserId.get(userId).add(meetingId);
+        }
+        return participantMeetingIdsByUserId;
+
     }
 
-    // public static Map<Id, Set<Id>> getExistMeetingShareIdsByUserId(
-    //     Map<Id, Set<Id>> meetingIdsByUserId,
-    //     List<String> sharingRowCauses
-    // ) {
-    //     List<Meeting__Share> existingShares = getExistingShares(meetingIdsByUserId, sharingRowCauses);
+    public static Map<Id, List<Meeting__Share>> getExistingMeetingShareRecordsByUserId(
+            Map<Id, Set<Id>> meetingIdsByUserId,
+            List<String> sharingRowCauses) {
 
-    //     Map<Id, Set<Id>> meetingShareIdsByUserId = new Map<Id, Set<Id>>();
-    //     for (Meeting__Share meetingShare : existingShares) {
-    //         Id userId = meetingShare.UserOrGroupId;
-    //         if (meetingIdsByUserId.get(userId)?.contains(meetingShare.ParentId) != true){
-    //             continue;
-    //         }
-
-    //         if (!meetingShareIdsByUserId.containsKey(userId)) {
-    //             meetingShareIdsByUserId.put(userId, new Set<Id>());
-    //         }
-    //         meetingShareIdsByUserId.get(userId).add(meetingShare.Id);
-    //     }
-
-    //     return meetingShareIdsByUserId;
-    // }
-
-    public static List<Meeting__Share> getExistingShares(
-        Map<Id, Set<Id>> meetingIdsByUserId,
-        List<String> sharingRowCauses
-    ) {
-        Set<Id> userIds = meetingIdsByUserId.keySet();
+        Map<Id, List<Meeting__Share>> sharedMeetingsByUserId = new Map<Id, List<Meeting__Share>>();
         Set<Id> allMeetingIds = new Set<Id>();
-        for(Id userId : userIds) {
+
+        if (meetingIdsByUserId == null || meetingIdsByUserId.isEmpty() || sharingRowCauses == null || sharingRowCauses.isEmpty()) {
+            return sharedMeetingsByUserId;
+        }
+
+        for (Id userId : meetingIdsByUserId.keySet()) {
             allMeetingIds.addAll(meetingIdsByUserId.get(userId));
         }
 
-        //TODO Delete
-        // System.debug('-----userIds: ' + userIds);
-        // System.debug('-----allMeetingIds: ' + allMeetingIds);
-        // System.debug('-----sharingRowCauses: ' + sharingRowCauses);
-
-        List<Meeting__Share> existingShares = [
-            SELECT Id, ParentId, UserOrGroupId, RowCause 
-            FROM Meeting__Share 
-            WHERE RowCause IN :sharingRowCauses
-                AND UserOrGroupId IN :userIds 
-                AND ParentId IN :allMeetingIds 
+        List<Meeting__Share> existingShareRecords = [
+                SELECT Id, ParentId, UserOrGroupId, RowCause
+                FROM Meeting__Share
+                WHERE RowCause IN :sharingRowCauses
+                AND UserOrGroupId IN :meetingIdsByUserId.keySet()
+                AND ParentId IN :allMeetingIds
         ];
 
-        return existingShares;
+        for (Meeting__Share meetingShare : existingShareRecords) {
+            Id userId = meetingShare.UserOrGroupId;
+            Id meetingId = meetingShare.ParentId;
+            Set<Id> userMeetings = meetingIdsByUserId.get(userId);
+
+            if (!sharedMeetingsByUserId.containsKey(userId)) {
+                sharedMeetingsByUserId.put(userId, new List<Meeting__Share>());
+            }
+            if (userMeetings.contains(meetingId)) {
+                sharedMeetingsByUserId.get(userId).add(meetingShare);
+            }
+        }
+
+        return sharedMeetingsByUserId;
     }
-    
+
     public static Meeting__Share createMeetingShare(Id userId, Id meetingId) {
         Meeting__Share share = new Meeting__Share();
         share.ParentId = meetingId;
         share.UserOrGroupId = userId;
         share.AccessLevel = 'Read';
-        share.RowCause = 'CustomSharing__c'; // Important for delete
-        // share.RowCause = 'Manual'; // Important for delete
-        
+        share.RowCause = 'Manual';
         return share;
     }
 }
