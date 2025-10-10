@@ -23,7 +23,7 @@ public without sharing class MeetingTriggerHandler {
             }
         } else {
             for (Meeting__c meeting : newMeetings) {
-                if (oldMeetingsMap.get(meeting.Id) == meeting.Account__c) continue;
+                if (oldMeetingsMap.get(meeting.Id).Account__c == meeting.Account__c) continue;
 
                 changedAccountMeetings.add(meeting);
             }
@@ -169,7 +169,7 @@ public without sharing class MeetingTriggerHandler {
 
 
 
-    
+
     //ForExample--------------------------------------------------------------------
 
     public static void shareByLinkedAccount1(List<Meeting__c> meetings) {
